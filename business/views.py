@@ -8,7 +8,7 @@ from django.db.models import Count, OuterRef, Subquery
 from django.http import JsonResponse
 from django.shortcuts import render
 
-from .models import Batiment, Enterprise, LegalUnitPeriod
+from .models import Batiment, Business, LegalUnitPeriod
 
 
 NAF_SECTION_RANGES = [
@@ -99,7 +99,7 @@ def dashboard_view(request):
 	)
 
 	context = {
-		"total_enterprises": Enterprise.objects.count(),
+		"total_enterprises": Business.objects.count(),
 		"total_batiments": Batiment.objects.count(),
 		"located_batiments": Batiment.objects.exclude(location__isnull=True).count(),
 		"active_legal_units": LegalUnitPeriod.objects.filter(
@@ -156,12 +156,12 @@ def dashboard_map_data(request):
 	page_size = max(50, min(page_size, 1000))
 
 	latest_period = LegalUnitPeriod.objects.filter(
-		legal_unit_id=OuterRef("enterprise__siren")
+		legal_unit_id=OuterRef("business__siren")
 	).order_by("-date_debut", "-id")
 
 	queryset = (
 		Batiment.objects.exclude(location__isnull=True)
-		.select_related("enterprise", "enterprise__legal_unit")
+		.select_related("business", "business__legal_unit")
 		.annotate(
 			latest_activity=Subquery(latest_period.values("activite_principale")[:1]),
 			latest_denomination=Subquery(latest_period.values("denomination")[:1]),
@@ -173,7 +173,7 @@ def dashboard_map_data(request):
 
 	if activity:
 		queryset = queryset.filter(
-			enterprise__legal_unit__periods__activite_principale__icontains=activity
+			business__legal_unit__periods__activite_principale__icontains=activity
 		).distinct()
 
 	geocoded_center = None
@@ -218,7 +218,7 @@ def dashboard_map_data(request):
 		denomination = batiment.latest_denomination or batiment.latest_nom or "Unknown"
 		markers.append(
 			{
-				"siren": batiment.enterprise_id,
+				"siren": batiment.business_id,
 				"siret": batiment.siret,
 				"lat": lat,
 				"lon": lon,

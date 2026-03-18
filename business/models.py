@@ -3,11 +3,11 @@ from django.contrib.gis.db import models as gis_models
 
 
 class Business(models.Model):
-    """Represents an enterprise/company identified by SIREN (9 digits)"""
+    """Represents an business identified by SIREN (9 digits)"""
     siren = models.CharField(max_length=9, primary_key=True)
 
     class Meta:
-        db_table = 'enterprise'
+        db_table = 'business'
 
     def __str__(self):
         return f"SIREN {self.siren}"
