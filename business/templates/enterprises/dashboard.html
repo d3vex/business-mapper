@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enterprise Dashboard</title>
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    />
+    <style>
+        :root {
+            --bg: #0b1020;
+            --bg-soft: #131a2e;
+            --glass: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.14);
+            --text: #e8edff;
+            --muted: #9ca6c7;
+            --accent: #6ea8ff;
+            --accent-2: #61e7b8;
+            --danger: #ff6b81;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: radial-gradient(circle at top right, #172347, var(--bg));
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .header {
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            margin-top: 6px;
+            color: var(--muted);
+        }
+
+        .kpis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(14px);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        .card h3 {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .card .value {
+            margin-top: 10px;
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--accent-2);
+        }
+
+        .panel {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(16px);
+            border-radius: 20px;
+            padding: 16px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .input {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .input label {
+            font-size: 0.84rem;
+            color: var(--muted);
+        }
+
+        .input input {
+            background: rgba(8, 13, 27, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text);
+            border-radius: 10px;
+            padding: 10px;
+            outline: none;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .btn {
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #3a7bfd, #59b3ff);
+        }
+
+        .btn.secondary {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        #map {
+            height: 62vh;
+            min-height: 420px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .map-wrap {
+            position: relative;
+        }
+
+        .map-loading {
+            position: absolute;
+            inset: 0;
+            display: none;
+            pointer-events: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 600;
+        }
+
+        .map-loading.active {
+            display: flex;
+        }
+
+        .map-loading__chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(11, 16, 32, 0.72);
+            border: 1px solid rgba(110, 168, 255, 0.55);
+            border-radius: 999px;
+            padding: 10px 16px;
+            color: #dfe7ff;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            box-shadow: 0 0 0 2px rgba(97, 231, 184, 0.25), 0 8px 26px rgba(0, 0, 0, 0.35);
+            animation: loaderPulse 1.1s ease-in-out infinite;
+        }
+
+        .map-loading__spinner {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            border-top-color: #61e7b8;
+            animation: spin 0.85s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes loaderPulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 2px rgba(97, 231, 184, 0.22), 0 8px 26px rgba(0, 0, 0, 0.35); }
+            50% { transform: scale(1.04); box-shadow: 0 0 0 5px rgba(97, 231, 184, 0.28), 0 12px 34px rgba(0, 0, 0, 0.45); }
+            100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(97, 231, 184, 0.22), 0 8px 26px rgba(0, 0, 0, 0.35); }
+        }
+
+        .meta {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .error {
+            color: var(--danger);
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 14px; }
+            .actions { width: 100%; }
+            .btn { width: 100%; }
+            #map { height: 56vh; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Enterprise Intelligence Dashboard</h1>
+            <div class="subtitle">Explore enterprises by activity and geography with interactive POI map.</div>
+        </div>
+
+        <section class="kpis">
+            <div class="card"><h3>Total Enterprises</h3><div class="value">{{ total_enterprises }}</div></div>
+            <div class="card"><h3>Total Buildings (Batiment)</h3><div class="value">{{ total_batiments }}</div></div>
+            <div class="card"><h3>Geolocated Buildings</h3><div class="value">{{ located_batiments }}</div></div>
+            <div class="card"><h3>Active Legal Units</h3><div class="value">{{ active_legal_units }}</div></div>
+            <div class="card"><h3>Top Activity</h3><div class="value">{{ top_activity }}</div></div>
+        </section>
+
+        <section class="panel">
+            <div class="filters">
+                <div class="input">
+                    <label for="activity">Activity sector</label>
+                    <input id="activity" type="text" list="activityOptions" placeholder="e.g. 47.79Z, 68.20" />
+                </div>
+                <div class="input">
+                    <label for="geo">Geographical sector (address/city/postal)</label>
+                    <input id="geo" type="text" placeholder="e.g. Paris, Lyon 69000" />
+                </div>
+                <div class="input">
+                    <label for="radius">Range (km)</label>
+                    <input id="radius" type="number" min="1" max="500" value="25" />
+                </div>
+                <div class="actions">
+                    <button class="btn" id="apply">Apply filters</button>
+                    <button class="btn secondary" id="reset">Reset</button>
+                </div>
+            </div>
+            <datalist id="activityOptions"></datalist>
+
+            <div class="map-wrap">
+                <div id="map"></div>
+                <div id="mapLoading" class="map-loading" aria-live="polite" aria-atomic="true">
+                    <div class="map-loading__chip">
+                        <span class="map-loading__spinner" aria-hidden="true"></span>
+                        <span>Loading POI data…</span>
+                    </div>
+                </div>
+            </div>
+            <div class="meta">
+                <span id="meta-count">Loading map data…</span>
+                <span id="meta-note"></span>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 10px; align-items: center;">
+                <button class="btn secondary" id="previousPage" style="display: none;">Previous page</button>
+                <button class="btn" id="loadMore" style="display: none;">Load more POI</button>
+            </div>
+        </section>
+    </div>
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+    ></script>
+    <script>
+        const map = L.map('map', { zoomControl: true }).setView([46.603354, 1.888334], 6);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap &copy; CARTO'
+        }).addTo(map);
+
+        let markersLayer = L.layerGroup().addTo(map);
+        let radiusLayer = null;
+        const FIXED_PAGE_SIZE = 200;
+        const MAX_DISPLAYED_POI = 5000;
+        let frontPageIndex = 1;
+
+        const activityInput = document.getElementById('activity');
+        const activityOptions = document.getElementById('activityOptions');
+        const geoInput = document.getElementById('geo');
+        const radiusInput = document.getElementById('radius');
+        const metaCount = document.getElementById('meta-count');
+        const metaNote = document.getElementById('meta-note');
+        const loadMoreBtn = document.getElementById('loadMore');
+        const previousPageBtn = document.getElementById('previousPage');
+        const mapLoading = document.getElementById('mapLoading');
+        let loadingDepth = 0;
+        let pageStartCursors = [null];
+
+        let paginationState = {
+            cursor: null,
+            has_more: false,
+            center: null,
+            radius_km: null
+        };
+
+        function setMapLoading(isLoading) {
+            if (isLoading) {
+                loadingDepth += 1;
+            } else {
+                loadingDepth = Math.max(0, loadingDepth - 1);
+            }
+            mapLoading.classList.toggle('active', loadingDepth > 0);
+        }
+
+        function forceHideMapLoading() {
+            loadingDepth = 0;
+            mapLoading.classList.remove('active');
+        }
+
+        function formatCompactNumber(value) {
+            const absValue = Math.abs(value);
+            const units = [
+                { threshold: 1e12, suffix: 'T' },
+                { threshold: 1e9, suffix: 'B' },
+                { threshold: 1e6, suffix: 'M' },
+                { threshold: 1e3, suffix: 'K' },
+            ];
+            for (const unit of units) {
+                if (absValue >= unit.threshold) {
+                    const scaled = value / unit.threshold;
+                    const rounded = Math.abs(scaled) >= 100 ? scaled.toFixed(0) : scaled.toFixed(1).replace(/\.0$/, '');
+                    return `${rounded}${unit.suffix}`;
+                }
+            }
+            return String(value);
+        }
+
+        function formatKpiValues() {
+            document.querySelectorAll('.kpis .card .value').forEach((el) => {
+                const normalized = el.textContent.trim().replace(/[\s,\u00A0\u202F]/g, '');
+                if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
+                    return;
+                }
+                const value = Number(normalized);
+                if (!Number.isFinite(value)) {
+                    return;
+                }
+                el.textContent = formatCompactNumber(value);
+            });
+        }
+
+        function popupHtml(m) {
+            return `
+                <div style="min-width:220px">
+                    <b>${m.name ?? 'Enterprise'}</b><br/>
+                    <small>SIREN: ${m.siren}</small><br/>
+                    <small>SIRET: ${m.siret}</small><br/>
+                    <small>Activity: ${m.activity ?? 'N/A'}</small><br/>
+                    <small>Status: ${m.state ?? 'N/A'}</small><br/>
+                    <small>Postal code: ${m.postal_code ?? 'N/A'}</small>
+                    ${m.distance_km !== null ? `<br/><small>Distance: ${m.distance_km} km</small>` : ''}
+                </div>
+            `;
+        }
+
+        function normalizeActivityFilter(rawValue) {
+            const value = (rawValue || '').trim();
+            if (!value) {
+                return '';
+            }
+
+            const strictCode = value.match(/^[0-9]{2}(?:\.[0-9A-Z]{2,3})?[A-Z]?$/i);
+            if (strictCode) {
+                return strictCode[0].toUpperCase();
+            }
+
+            const extractedCode = value.match(/[0-9]{2}(?:\.[0-9A-Z]{2,3})?[A-Z]?/i);
+            if (extractedCode) {
+                return extractedCode[0].toUpperCase();
+            }
+
+            return value;
+        }
+
+        async function loadActivityOptions() {
+            try {
+                const response = await fetch('/enterprises/dashboard/naf-codes/?limit=5000');
+                if (!response.ok) {
+                    return;
+                }
+                const data = await response.json();
+                const codes = Array.isArray(data.codes) ? data.codes : [];
+                activityOptions.innerHTML = '';
+                for (const row of codes) {
+                    if (!row || !row.code) {
+                        continue;
+                    }
+                    const option = document.createElement('option');
+                    option.value = row.label || row.code;
+                    option.setAttribute('data-code', row.code);
+                    activityOptions.appendChild(option);
+                }
+            } catch (_) {
+            }
+        }
+
+        async function loadData(append = false, autoFetchAllPages = !append, cursorOverride = null) {
+            const normalizedActivity = normalizeActivityFilter(activityInput.value);
+            const params = new URLSearchParams({
+                activity: normalizedActivity,
+                geo: geoInput.value,
+                radius: radiusInput.value || 25,
+                page_size: FIXED_PAGE_SIZE
+            });
+
+            const requestCursor = cursorOverride ?? (append ? paginationState.cursor : null);
+            if (requestCursor) {
+                params.append('cursor', requestCursor);
+            }
+
+            if (!append) {
+                if (!cursorOverride) {
+                    frontPageIndex = 1;
+                    pageStartCursors = [null];
+                }
+                markersLayer.clearLayers();
+                if (radiusLayer) {
+                    map.removeLayer(radiusLayer);
+                    radiusLayer = null;
+                }
+                metaCount.textContent = 'Loading map data…';
+                metaNote.textContent = '';
+            }
+
+            loadMoreBtn.style.display = 'none';
+            setMapLoading(true);
+
+            try {
+                const response = await fetch(`/enterprises/dashboard/map-data/?${params.toString()}`);
+                const data = await response.json();
+
+                const bounds = [];
+                let lastRenderedSiret = null;
+                let reachedDisplayCap = false;
+                for (const marker of data.markers) {
+                    if (markersLayer.getLayers().length >= MAX_DISPLAYED_POI) {
+                        reachedDisplayCap = true;
+                        break;
+                    }
+                    const p = [marker.lat, marker.lon];
+                    if (!append) bounds.push(p);
+                    L.circleMarker(p, {
+                        radius: 5,
+                        color: '#76b8ff',
+                        fillColor: '#57e0b7',
+                        fillOpacity: 0.75,
+                        weight: 1
+                    }).bindPopup(popupHtml(marker)).addTo(markersLayer);
+                    lastRenderedSiret = marker.siret;
+                }
+
+                if (!append && data.center) {
+                    paginationState.center = data.center;
+                    paginationState.radius_km = data.radius_km;
+                    const center = [data.center.lat, data.center.lon];
+                    radiusLayer = L.circle(center, {
+                        radius: (data.radius_km || 0) * 1000,
+                        color: '#8ab6ff',
+                        fillColor: '#8ab6ff',
+                        fillOpacity: 0.12,
+                        weight: 1,
+                        interactive: false
+                    }).addTo(map);
+                    map.setView(center, 11);
+                } else if (!append && bounds.length > 0) {
+                    map.fitBounds(bounds, { padding: [20, 20] });
+                }
+
+                if (reachedDisplayCap && lastRenderedSiret) {
+                    paginationState.cursor = lastRenderedSiret;
+                    paginationState.has_more = true;
+                } else {
+                    paginationState.cursor = data.pagination.cursor;
+                    paginationState.has_more = data.pagination.has_more;
+                }
+
+                if (!append) {
+                    const pageSlot = Math.max(0, frontPageIndex - 1);
+                    pageStartCursors[pageSlot] = cursorOverride ?? null;
+                    pageStartCursors = pageStartCursors.slice(0, pageSlot + 1);
+                }
+
+                if (!append && autoFetchAllPages && data.pagination.has_more && data.pagination.cursor) {
+                    while (
+                        paginationState.has_more
+                        && paginationState.cursor
+                        && markersLayer.getLayers().length < MAX_DISPLAYED_POI
+                    ) {
+                        await loadData(true, false);
+                    }
+                    if (markersLayer.getLayers().length >= MAX_DISPLAYED_POI) {
+                        forceHideMapLoading();
+                    }
+                }
+
+                const currentCount = markersLayer.getLayers().length;
+
+                metaCount.textContent = `${currentCount.toLocaleString()} POI displayed · Page ${frontPageIndex} · Max ${MAX_DISPLAYED_POI.toLocaleString()}`;
+                previousPageBtn.style.display = frontPageIndex > 1 ? 'inline-block' : 'none';
+                
+                if (paginationState.has_more) {
+                    loadMoreBtn.style.display = 'inline-block';
+                    if (markersLayer.getLayers().length >= MAX_DISPLAYED_POI) {
+                        loadMoreBtn.textContent = 'Next map page';
+                        metaNote.textContent = `Display cap reached (${MAX_DISPLAYED_POI.toLocaleString()} POI). Click "Next map page" to continue.`;
+                    } else {
+                        loadMoreBtn.textContent = 'Load more POI';
+                        metaNote.textContent = `More results available (cursor: ${(paginationState.cursor || '').substring(0, 8)}...)`;
+                    }
+                } else {
+                    loadMoreBtn.textContent = 'Load more POI';
+                    metaNote.textContent = append ? 'No more results' : 'All results loaded';
+                }
+
+                if (data.meta.geocode_error) {
+                    metaNote.innerHTML = `<span class="error">${data.meta.geocode_error}</span>`;
+                } else if (!append && data.center && !paginationState.has_more && markersLayer.getLayers().length < MAX_DISPLAYED_POI) {
+                    metaNote.textContent = `Centered on: ${data.center.display_name}`;
+                }
+            } catch (err) {
+                metaNote.innerHTML = `<span class="error">Error loading data: ${err.message}</span>`;
+            } finally {
+                setMapLoading(false);
+            }
+        }
+
+        document.getElementById('apply').addEventListener('click', () => {
+            paginationState.cursor = null;
+            paginationState.has_more = false;
+            frontPageIndex = 1;
+            pageStartCursors = [null];
+            loadData(false);
+        });
+
+        document.getElementById('reset').addEventListener('click', () => {
+            activityInput.value = '';
+            geoInput.value = '';
+            radiusInput.value = 25;
+            paginationState.cursor = null;
+            paginationState.has_more = false;
+            frontPageIndex = 1;
+            pageStartCursors = [null];
+            loadData(false);
+        });
+
+        loadMoreBtn.addEventListener('click', () => {
+            if (markersLayer.getLayers().length >= MAX_DISPLAYED_POI && paginationState.has_more && paginationState.cursor) {
+                pageStartCursors[frontPageIndex] = paginationState.cursor;
+                frontPageIndex += 1;
+                loadData(false, true, paginationState.cursor);
+                return;
+            }
+            loadData(true);
+        });
+
+        previousPageBtn.addEventListener('click', () => {
+            if (frontPageIndex <= 1) {
+                return;
+            }
+            frontPageIndex -= 1;
+            const previousCursor = pageStartCursors[frontPageIndex - 1] ?? null;
+            loadData(false, true, previousCursor);
+        });
+
+        formatKpiValues();
+        loadActivityOptions();
+        loadData(false);
+    </script>
+</body>
+</html>
