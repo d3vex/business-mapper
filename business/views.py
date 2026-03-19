@@ -99,7 +99,7 @@ def dashboard_view(request):
 	)
 
 	context = {
-		"total_enterprises": Business.objects.count(),
+		"total_business": Business.objects.count(),
 		"total_batiments": Batiment.objects.count(),
 		"located_batiments": Batiment.objects.exclude(location__isnull=True).count(),
 		"active_legal_units": LegalUnitPeriod.objects.filter(

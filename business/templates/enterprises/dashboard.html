@@ -224,12 +224,12 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Enterprise Intelligence Dashboard</h1>
-            <div class="subtitle">Explore enterprises by activity and geography with interactive POI map.</div>
+            <h1>Business Intelligence Dashboard</h1>
+            <div class="subtitle">Explore businesses by activity and geography with interactive POI map.</div>
         </div>
 
         <section class="kpis">
-            <div class="card"><h3>Total Enterprises</h3><div class="value">{{ total_enterprises }}</div></div>
+            <div class="card"><h3>Total Businesses</h3><div class="value">{{ total_business }}</div></div>
             <div class="card"><h3>Total Buildings (Batiment)</h3><div class="value">{{ total_batiments }}</div></div>
             <div class="card"><h3>Geolocated Buildings</h3><div class="value">{{ located_batiments }}</div></div>
             <div class="card"><h3>Active Legal Units</h3><div class="value">{{ active_legal_units }}</div></div>
@@ -395,7 +395,7 @@
 
         async function loadActivityOptions() {
             try {
-                const response = await fetch('/enterprises/dashboard/naf-codes/?limit=5000');
+                const response = await fetch('/dashboard/naf-codes/?limit=5000');
                 if (!response.ok) {
                     return;
                 }
@@ -447,7 +447,7 @@
             setMapLoading(true);
 
             try {
-                const response = await fetch(`/enterprises/dashboard/map-data/?${params.toString()}`);
+                const response = await fetch(`/dashboard/map-data/?${params.toString()}`);
                 const data = await response.json();
 
                 const bounds = [];
