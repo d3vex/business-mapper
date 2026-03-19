@@ -161,7 +161,6 @@ def dashboard_map_data(request):
 
 	queryset = (
 		Batiment.objects.exclude(location__isnull=True)
-		.select_related("business", "business__legal_unit")
 		.annotate(
 			latest_activity=Subquery(latest_period.values("activite_principale")[:1]),
 			latest_denomination=Subquery(latest_period.values("denomination")[:1]),
@@ -172,9 +171,7 @@ def dashboard_map_data(request):
 	)
 
 	if activity:
-		queryset = queryset.filter(
-			business__legal_unit__periods__activite_principale__icontains=activity
-		).distinct()
+		queryset = queryset.filter(latest_activity__icontains=activity)
 
 	geocoded_center = None
 	geocode_error = None
@@ -188,23 +185,40 @@ def dashboard_map_data(request):
 		if geocoded_center:
 			center_point = Point(geocoded_center["lon"], geocoded_center["lat"], srid=4326)
 			if radius_km > 0:
-				queryset = queryset.filter(location__dwithin=(center_point, D(km=radius_km)))
+				queryset = queryset.filter(location__distance_lte=(center_point, D(km=radius_km)))
 		else:
 			queryset = queryset.filter(postal_code__icontains=geo_query)
 
 	if cursor:
 		queryset = queryset.filter(siret__gt=cursor)
 
+	rows = list(
+		queryset.values(
+			"business_id",
+			"siret",
+			"postal_code",
+			"location",
+			"latest_activity",
+			"latest_admin_state",
+			"latest_denomination",
+			"latest_nom",
+		)[: page_size + 1]
+	)
+
+	has_more = len(rows) > page_size
+	if has_more:
+		rows = rows[:page_size]
+
+	next_cursor = rows[-1]["siret"] if has_more and rows else None
+
 	markers = []
-	has_more = False
-	next_cursor = None
-	
-	for batiment in queryset.iterator(chunk_size=500):
-		if not batiment.location:
+	for row in rows:
+		location = row["location"]
+		if not location:
 			continue
 
-		lon = float(batiment.location.x)
-		lat = float(batiment.location.y)
+		lon = float(location.x)
+		lat = float(location.y)
 
 		distance_km = None
 		if geocoded_center and radius_km > 0:
@@ -215,26 +229,20 @@ def dashboard_map_data(request):
 				lon,
 			)
 
-		denomination = batiment.latest_denomination or batiment.latest_nom or "Unknown"
+		denomination = row["latest_denomination"] or row["latest_nom"] or "Unknown"
 		markers.append(
 			{
-				"siren": batiment.business_id,
-				"siret": batiment.siret,
+				"siren": row["business_id"],
+				"siret": row["siret"],
 				"lat": lat,
 				"lon": lon,
-				"postal_code": batiment.postal_code,
-				"activity": batiment.latest_activity,
-				"state": batiment.latest_admin_state,
+				"postal_code": row["postal_code"],
+				"activity": row["latest_activity"],
+				"state": row["latest_admin_state"],
 				"name": denomination,
 				"distance_km": round(distance_km, 2) if distance_km is not None else None,
 			}
 		)
-
-		if len(markers) > page_size:
-			markers.pop()
-			has_more = True
-			next_cursor = markers[-1]["siret"]
-			break
 
 	return JsonResponse(
 		{
