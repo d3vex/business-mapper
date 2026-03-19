@@ -1,5 +1,6 @@
 from functools import lru_cache
 import math
+import re
 
 import requests
 from django.contrib.gis.geos import Point
@@ -141,7 +142,7 @@ def dashboard_naf_codes(request):
 
 
 def dashboard_map_data(request):
-	activity = request.GET.get("activity", "").strip()
+	activity_raw = request.GET.get("activity", "").strip()
 	geo_query = request.GET.get("geo", "").strip()
 	cursor = request.GET.get("cursor", "").strip()
 	try:
@@ -155,23 +156,27 @@ def dashboard_map_data(request):
 		page_size = 250
 	page_size = max(50, min(page_size, 1000))
 
-	latest_period = LegalUnitPeriod.objects.filter(
-		legal_unit_id=OuterRef("business__siren")
-	).order_by("-date_debut", "-id")
+	activity = ""
+	if activity_raw:
+		strict_code = re.match(r"^[0-9]{2}(?:\.[0-9A-Z]{2,3})?[A-Z]?$", activity_raw, flags=re.I)
+		if strict_code:
+			activity = strict_code.group(0).upper()
+		else:
+			extracted_code = re.search(r"[0-9]{2}(?:\.[0-9A-Z]{2,3})?[A-Z]?", activity_raw, flags=re.I)
+			activity = extracted_code.group(0).upper() if extracted_code else activity_raw
 
-	queryset = (
-		Batiment.objects.exclude(location__isnull=True)
-		.annotate(
-			latest_activity=Subquery(latest_period.values("activite_principale")[:1]),
-			latest_denomination=Subquery(latest_period.values("denomination")[:1]),
-			latest_nom=Subquery(latest_period.values("nom")[:1]),
-			latest_admin_state=Subquery(latest_period.values("etat_administratif")[:1]),
-		)
-		.order_by("siret")
-	)
+	queryset = Batiment.objects.exclude(location__isnull=True).order_by("siret")
 
 	if activity:
-		queryset = queryset.filter(latest_activity__icontains=activity)
+		if re.match(r"^[0-9]{2}(?:\.[0-9A-Z]{2,3})?[A-Z]?$", activity, flags=re.I):
+			matching_business_ids = LegalUnitPeriod.objects.filter(
+				activite_principale__istartswith=activity
+			).values("legal_unit_id")
+		else:
+			matching_business_ids = LegalUnitPeriod.objects.filter(
+				activite_principale__icontains=activity
+			).values("legal_unit_id")
+		queryset = queryset.filter(business_id__in=Subquery(matching_business_ids))
 
 	geocoded_center = None
 	geocode_error = None
@@ -191,6 +196,17 @@ def dashboard_map_data(request):
 
 	if cursor:
 		queryset = queryset.filter(siret__gt=cursor)
+
+	latest_period = LegalUnitPeriod.objects.filter(
+		legal_unit_id=OuterRef("business_id")
+	).order_by("-date_debut", "-id")
+
+	queryset = queryset.annotate(
+		latest_activity=Subquery(latest_period.values("activite_principale")[:1]),
+		latest_denomination=Subquery(latest_period.values("denomination")[:1]),
+		latest_nom=Subquery(latest_period.values("nom")[:1]),
+		latest_admin_state=Subquery(latest_period.values("etat_administratif")[:1]),
+	)
 
 	rows = list(
 		queryset.values(
