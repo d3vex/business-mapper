@@ -168,6 +168,7 @@ def dashboard_map_data(request):
 			latest_nom=Subquery(latest_period.values("nom")[:1]),
 			latest_admin_state=Subquery(latest_period.values("etat_administratif")[:1]),
 		)
+		.order_by("siret")
 	)
 
 	if activity:
@@ -181,24 +182,18 @@ def dashboard_map_data(request):
 	if geo_query:
 		try:
 			geocoded_center = geocode_address(geo_query)
-		except Exception:
+		except requests.RequestException:
 			geocode_error = "Geocoding service is temporarily unavailable."
 
 		if geocoded_center:
-			center_point = Point(
-				geocoded_center["lon"],
-				geocoded_center["lat"],
-				srid=4326
-			)
-
-			# IMPORTANT FIX:
-			# radius in meters for GeoDjango
-			queryset = queryset.filter(
-			    location__dwithin=(center_point, radius_km * 1000)
-			)
-
+			center_point = Point(geocoded_center["lon"], geocoded_center["lat"], srid=4326)
+			if radius_km > 0:
+				queryset = queryset.filter(
+				    location__dwithin=(center_point, radius_km * 1000)
+				)
 		else:
 			queryset = queryset.filter(postal_code__icontains=geo_query)
+
 	if cursor:
 		queryset = queryset.filter(siret__gt=cursor)
 
@@ -206,7 +201,7 @@ def dashboard_map_data(request):
 	has_more = False
 	next_cursor = None
 	
-	queryset = queryset.order_by("siret")[: page_size + 1]  # Fetch one extra to check if there's more
+	queryset = queryset[: page_size + 1]  # Fetch one extra to determine if there's a next page
 
 	for batiment in queryset:
 		if not batiment.location:
