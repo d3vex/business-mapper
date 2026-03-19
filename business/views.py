@@ -188,7 +188,9 @@ def dashboard_map_data(request):
 		if geocoded_center:
 			center_point = Point(geocoded_center["lon"], geocoded_center["lat"], srid=4326)
 			if radius_km > 0:
-				queryset = queryset.filter(location__distance_lte=(center_point, D(km=radius_km)))
+				queryset = queryset.filter(
+				    location__dwithin=(center_point, radius_km * 1000)
+				)
 		else:
 			queryset = queryset.filter(postal_code__icontains=geo_query)
 
